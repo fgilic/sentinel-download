@@ -1,1 +1,1 @@
-# sentinel-download
+# Download Sentinel-2 data
