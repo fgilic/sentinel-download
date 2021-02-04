@@ -1,16 +1,46 @@
-# This is a sample Python script.
+import sys
 
-# Press Shift+F10 to execute it or replace it with your code.
-# Press Double Shift to search everywhere for classes, files, tool windows, actions, and settings.
+import requests
 
-
-def print_hi(name):
-    # Use a breakpoint in the code line below to debug your script.
-    print(f'Hi, {name}')  # Press Ctrl+F8 to toggle the breakpoint.
+from utils import build_search_params, get_response, check_response_content, parse_search_results, get_tile
 
 
-# Press the green button in the gutter to run the script.
 if __name__ == '__main__':
-    print_hi('PyCharm')
+    rows = 10  # also default if not defined, max is 100
+    start = 0  # also default if not defined
 
-# See PyCharm help at https://www.jetbrains.com/help/pycharm/
+    root_search_url = "https://scihub.copernicus.eu/dhus/search"
+    producttype = "S2MSI2A"
+    beginposition = "[NOW-2MONTHS TO NOW]"
+    # point: '(Lat, Long)'; polygon: 'POLYGON((Lat1 Long1, Lat2 Long2, ..., Lat1 Long2))'
+    # Lat and Long in decimal degrees
+    # http://arthur-e.github.io/Wicket/sandbox-gmaps3.html
+    footprint = "POLYGON((43.3531 16.1430, 43.3531 16.7802, 43.6489 16.7802, 43.6489 16.1430, 43.3531 16.1430))"
+    cloudcoverpercentage = "[0 TO 15]"
+
+    search_params = build_search_params(rows, start, producttype, beginposition, footprint, cloudcoverpercentage)
+
+    search_response = get_response(root_search_url, search_params)
+    xml_root = check_response_content(search_response)
+    all_entries = []
+    total_results = int(
+        xml_root.find("{http://a9.com/-/spec/opensearch/1.1/}totalResults").text
+    )
+    print(f"URI: {search_response.url}\n")
+    print(f"Total results: {total_results}")
+
+    all_entries += parse_search_results(xml_root)
+
+    if total_results > rows:
+        start += 10
+        while start < total_results:
+            search_params = build_search_params(rows, start, producttype, beginposition, footprint, cloudcoverpercentage)
+            search_response = get_response(root_search_url, search_params)
+            xml_root = check_response_content(search_response)
+            all_entries += parse_search_results(xml_root)
+            start += 10
+
+    # sorting entries by cloudcoverpercentage, ascending
+    all_entries.sort(key=lambda cover_percentage: cover_percentage["cloudcoverpercentage"])
+
+    get_tile(all_entries[0])

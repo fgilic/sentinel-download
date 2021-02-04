@@ -1,124 +1,135 @@
-import sys
-import xml.etree.ElementTree as ET
 import requests
+import sys
 
-username = 'franegilic'
-password = 'KhqSXUaPnpyQEMxZ'
-
-
-def get_results(rows_, start_):
-    producttype = 'S2MSI2A'
-    beginposition = '[NOW-2MONTHS TO NOW]'
-    # point: '(Lat, Long)'; polygon: 'POLYGON((Lat1 Long1, Lat2 Long2, ..., Lat1 Long2))'; Lat and Long id decimal degrees
-    footprint = 'POLYGON((43.3531 16.1430, 43.3531 16.7802, 43.6489 16.7802, 43.6489 16.1430, 43.3531 16.1430))'
-    cloudcoverpercentage = '[0 TO 15]'
-
-    query = f'producttype:{producttype} AND beginposition:{beginposition} AND footprint:"intersects({footprint})" ' \
-            f'AND cloudcoverpercentage:{cloudcoverpercentage}'
-
-    payload = {'q': query, 'rows': rows_, 'start': start_}
-    return requests.get(
-        f'https://scihub.copernicus.eu/dhus/search', params=payload, auth=(username, password), timeout=(3.1, 60.1))
+import xml.etree.ElementTree as ET
 
 
-def check_response(response):
-    if response.status_code == requests.codes.ok:
-        pass
-    else:
-        print(f'HTTP status code: {response.status_code}')
+USERNAME = "franegilic"
+PASSWORD = "KhqSXUaPnpyQEMxZ"
+
+def build_search_params(rows, start, producttype, beginposition, footprint, cloudcoverpercentage):
+    # double quotes in footprint:"intersects()"
+    query = (
+        f"producttype:{producttype} AND beginposition:{beginposition} AND footprint:\"intersects({footprint})\" "
+        f"AND cloudcoverpercentage:{cloudcoverpercentage}"
+    )
+
+    return {"q": query, "rows": rows, "start": start}
+
+def get_response(root_url, params="", stream=False):
+    connect_timeout = 3.1
+    read_timeout = 60.1
+
+    try:
+        response = requests.get(
+            root_url,
+            params=params,
+            auth=(USERNAME, PASSWORD),
+            timeout=(connect_timeout, read_timeout),
+            stream=stream,
+        )
+
         response.raise_for_status()
 
+        return response
+    except requests.exceptions.Timeout:
+        print(f"Request timed out. ({connect_timeout})")
+        raise
+    except requests.exceptions.ConnectionError:
+        print("Connection error. Check internet connection and URL.")
+        raise
+    except requests.exceptions.HTTPError:
+        print(f"HTTP error, status code: {response.status_code}")
+        raise
 
-def check_results(response):
-    check_response(response)
+
+def check_response_content(response):
     root = ET.fromstring(response.content)
 
-    if root[0].tag == '{http://www.w3.org/2005/Atom}error':
-        print(f'Error while querying data.')
+    if root[0].tag == "{http://www.w3.org/2005/Atom}error":
+        print("Error while querying data.")
         print(f'Error code: {root[0].find("{http://www.w3.org/2005/Atom}code").text}.')
-        print(f'Error message: {root[0].find("{http://www.w3.org/2005/Atom}message").text}.')
+        print(
+            f'Error message: {root[0].find("{http://www.w3.org/2005/Atom}message").text}.'
+        )
         # https://stackoverflow.com/questions/19782075/how-to-stop-terminate-a-python-script-from-running/34029481
         sys.exit()
     return root
 
 
-def parse_results(xml_root):
+def parse_search_results(xml_root):
     entries = []
-    for entry in xml_root.findall('{http://www.w3.org/2005/Atom}entry'):
-        link = entry.find('{http://www.w3.org/2005/Atom}link').attrib['href']
-        title = entry.find('{http://www.w3.org/2005/Atom}title').text
-        id = entry.find('{http://www.w3.org/2005/Atom}id').text
+    for entry in xml_root.findall("{http://www.w3.org/2005/Atom}entry"):
+        link = entry.find("{http://www.w3.org/2005/Atom}link").attrib["href"]
+        title = entry.find("{http://www.w3.org/2005/Atom}title").text
+        id = entry.find("{http://www.w3.org/2005/Atom}id").text
 
         cloudcoverpercentage_ = None
-        for item in entry.findall('{http://www.w3.org/2005/Atom}double'):
-            if item.attrib['name'] == 'cloudcoverpercentage':
+        for item in entry.findall("{http://www.w3.org/2005/Atom}double"):
+            if item.attrib["name"] == "cloudcoverpercentage":
                 cloudcoverpercentage_ = item.text
                 break
 
         relativeorbitnumber = None
-        for item in entry.findall('{http://www.w3.org/2005/Atom}int'):
-            if item.attrib['name'] == 'relativeorbitnumber':
+        for item in entry.findall("{http://www.w3.org/2005/Atom}int"):
+            if item.attrib["name"] == "relativeorbitnumber":
                 relativeorbitnumber = item.text
                 break
 
         beginposition = None
-        for item in entry.findall('{http://www.w3.org/2005/Atom}date'):
-            if item.attrib['name'] == 'beginposition':
+        for item in entry.findall("{http://www.w3.org/2005/Atom}date"):
+            if item.attrib["name"] == "beginposition":
                 beginposition = item.text
                 break
 
         size = None
-        for item in entry.findall('{http://www.w3.org/2005/Atom}str'):
-            if item.attrib['name'] == 'size':
+        for item in entry.findall("{http://www.w3.org/2005/Atom}str"):
+            if item.attrib["name"] == "size":
                 size = item.text
                 break
 
         entries.append(
-            {'id': id, 'beginposition': beginposition, 'cloudcoverpercentage': cloudcoverpercentage_,
-             'relativeorbitnumber': relativeorbitnumber, 'link': link, 'size': size, 'title': title})
+            {
+                "id": id,
+                "beginposition": beginposition,
+                "cloudcoverpercentage": cloudcoverpercentage_,
+                "relativeorbitnumber": relativeorbitnumber,
+                "link": link,
+                "size": size,
+                "title": title,
+            }
+        )
     return entries
 
 
-def get_data(entries):
-    r = requests.get(entries[0]['link'], auth=(username, password), stream=True)
-    check_response(r)
+def get_tile(tile_data):
+    tile_url = tile_data['link']
+    tile_title = tile_data["title"]
+    tile_size = float(tile_data["size"].split(" ")[0])
+    response = get_response(tile_url, stream=True)
+
+    #try:
+    #    check_response_content(response)
+    #except ET.ParseError:
+    #    pass
 
     size_byte = 0.0
     tick = 0
-    with open(f'{entries[0]["title"]}.zip', 'wb') as fd:
-        for chunk in r.iter_content(chunk_size=2048):
+    with open(f'{tile_title}.zip', "wb") as fd:
+        for chunk in response.iter_content(chunk_size=2048):
             fd.write(chunk)
             size_byte += 2048
-            percentage = (size_byte / (1024 ** 3)) / float(entries[0]['size'].split(' ')[0]) * 100
+            percentage = (
+                (size_byte / (1024 ** 3))
+                / tile_size
+                * 100
+            )
             if (percentage - tick) > 0:
-                print('\r', 'Downloading: ', f'{tick} %', f' ({entries[0]["title"]})', end="")
+                print("\r", "Downloading: ", f"{tick:3d} %", f' ({tile_title})', end="")
                 tick += 1
 
-        print('\r', 'Copleted downloading', f' {entries[0]["title"]}', end="")
+        print("\r", "Copleted downloading", f' {tile_title}', end="")
 
 
-rows = 10
-start = 0
-response = get_results(rows, start)
-xml_root = check_results(response)
-all_entries = []
-total_results = int(xml_root.find("{http://a9.com/-/spec/opensearch/1.1/}totalResults").text)
-print(f'URI: {response.url}\n')
-print(f'Total results: {total_results}')
-
-all_entries.append(parse_results(xml_root))
-
-if total_results > rows:
-    start = 10
-    while start < total_results:
-        response = get_results(rows, start)
-        xml_root = check_results(response)
-        all_entries.append(parse_results(xml_root))
-        start += 10
-
-# sorting entries by cloudcoverpercentage, ascending
-all_entries.sort(key=lambda cover_percentage: cover_percentage['cloudcoverpercentage'])
-
-print(all_entries)
-
-get_data(all_entries)
+if __name__ == '__main__':
+    pass
