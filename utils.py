@@ -1,11 +1,14 @@
-import requests
 import sys
 
 import xml.etree.ElementTree as ET
-
+import pyproj
+from shapely import wkt
+from shapely.ops import transform
+import requests
 
 USERNAME = "franegilic"
 PASSWORD = "KhqSXUaPnpyQEMxZ"
+
 
 def build_search_params(rows, start, producttype, beginposition, footprint, cloudcoverpercentage):
     # double quotes in footprint:"intersects()"
@@ -15,6 +18,7 @@ def build_search_params(rows, start, producttype, beginposition, footprint, clou
     )
 
     return {"q": query, "rows": rows, "start": start}
+
 
 def get_response(root_url, params="", stream=False):
     connect_timeout = 3.1
@@ -62,7 +66,7 @@ def parse_search_results(xml_root):
     for entry in xml_root.findall("{http://www.w3.org/2005/Atom}entry"):
         link = entry.find("{http://www.w3.org/2005/Atom}link").attrib["href"]
         title = entry.find("{http://www.w3.org/2005/Atom}title").text
-        id = entry.find("{http://www.w3.org/2005/Atom}id").text
+        tile_id = entry.find("{http://www.w3.org/2005/Atom}id").text
 
         cloudcoverpercentage_ = None
         for item in entry.findall("{http://www.w3.org/2005/Atom}double"):
@@ -83,20 +87,34 @@ def parse_search_results(xml_root):
                 break
 
         size = None
+        polygon = None
+        platform_id = None
+        orbit_direction = None
         for item in entry.findall("{http://www.w3.org/2005/Atom}str"):
             if item.attrib["name"] == "size":
                 size = item.text
-                break
+                continue
+            if item.attrib["name"] == "footprint":
+                polygon = wkt.loads(item.text)[0]
+                continue
+            if item.attrib["name"] == "platformidentifier":
+                platform_id = item.text
+                continue
+            if item.attrib["name"] == "orbitdirection":
+                orbit_direction = item.text
 
         entries.append(
             {
-                "id": id,
+                "id": tile_id,
                 "beginposition": beginposition,
                 "cloudcoverpercentage": cloudcoverpercentage_,
                 "relativeorbitnumber": relativeorbitnumber,
                 "link": link,
                 "size": size,
                 "title": title,
+                "footprint": polygon,
+                "platformidentifier": platform_id,
+                "orbit_direction": orbit_direction,
             }
         )
     return entries
@@ -108,9 +126,9 @@ def get_tile(tile_data):
     tile_size = float(tile_data["size"].split(" ")[0])
     response = get_response(tile_url, stream=True)
 
-    #try:
+    # try:
     #    check_response_content(response)
-    #except ET.ParseError:
+    # except ET.ParseError:
     #    pass
 
     size_byte = 0.0
@@ -119,11 +137,7 @@ def get_tile(tile_data):
         for chunk in response.iter_content(chunk_size=2048):
             fd.write(chunk)
             size_byte += 2048
-            percentage = (
-                (size_byte / (1024 ** 3))
-                / tile_size
-                * 100
-            )
+            percentage = ((size_byte / (1024 ** 3)) / tile_size * 100)
             if (percentage - tick) > 0:
                 print("\r", "Downloading: ", f"{tick:3d} %", f' ({tile_title})', end="")
                 tick += 1

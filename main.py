@@ -1,7 +1,3 @@
-import sys
-
-import requests
-
 from utils import build_search_params, get_response, check_response_content, parse_search_results, get_tile
 
 
@@ -11,11 +7,13 @@ if __name__ == '__main__':
 
     root_search_url = "https://scihub.copernicus.eu/dhus/search"
     producttype = "S2MSI2A"
-    beginposition = "[NOW-2MONTHS TO NOW]"
-    # point: '(Lat, Long)'; polygon: 'POLYGON((Lat1 Long1, Lat2 Long2, ..., Lat1 Long2))'
+    # beginposition = "[NOW-9MONTHS TO NOW]"
+    beginposition = "[2020-08-01T00:00:00.000Z TO 2020-08-31T00:00:00.000Z]"
+    # point: '(Lat, Long)'; polygon: 'POLYGON((Long1 Lat1, Long2 Lat2, ..., Long1 Lat1))'
     # Lat and Long in decimal degrees
     # http://arthur-e.github.io/Wicket/sandbox-gmaps3.html
-    footprint = "POLYGON((43.3531 16.1430, 43.3531 16.7802, 43.6489 16.7802, 43.6489 16.1430, 43.3531 16.1430))"
+    # footprint = "POLYGON((16.1430 43.3531, 16.7802 43.3531, 16.7802 43.6489, 16.1430 43.6489, 16.1430 43.3531))"
+    footprint = "42.807492, 20.264526"
     cloudcoverpercentage = "[0 TO 15]"
 
     search_params = build_search_params(rows, start, producttype, beginposition, footprint, cloudcoverpercentage)
@@ -34,7 +32,9 @@ if __name__ == '__main__':
     if total_results > rows:
         start += 10
         while start < total_results:
-            search_params = build_search_params(rows, start, producttype, beginposition, footprint, cloudcoverpercentage)
+            search_params = build_search_params(
+                rows, start, producttype, beginposition, footprint, cloudcoverpercentage
+            )
             search_response = get_response(root_search_url, search_params)
             xml_root = check_response_content(search_response)
             all_entries += parse_search_results(xml_root)
