@@ -13,7 +13,7 @@ if __name__ == '__main__':
     # Lat and Long in decimal degrees
     # http://arthur-e.github.io/Wicket/sandbox-gmaps3.html
     # footprint = "POLYGON((16.1430 43.3531, 16.7802 43.3531, 16.7802 43.6489, 16.1430 43.6489, 16.1430 43.3531))"
-    footprint = "42.807492, 20.264526"
+    footprint = "42.807492, 18.264526"
     cloudcoverpercentage = "[0 TO 15]"
 
     search_params = build_search_params(rows, start, producttype, beginposition, footprint, cloudcoverpercentage)
