@@ -6,8 +6,8 @@ from shapely import wkt
 from shapely.ops import transform
 import requests
 
-USERNAME = "franegilic"
-PASSWORD = "KhqSXUaPnpyQEMxZ"
+USERNAME = input("Username: ")
+PASSWORD = input("Password: ")
 
 
 def build_search_params(rows, start, producttype, beginposition, footprint, cloudcoverpercentage):
