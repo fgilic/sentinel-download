@@ -2,8 +2,8 @@ from utils import build_search_params, get_response, check_response_content, par
 
 
 if __name__ == '__main__':
-    rows = 10  # also default if not defined, max is 100
-    start = 0  # also default if not defined
+    rows = 10  # 10 is also default if not defined, max is 100
+    start = 0  # 0 is also default if not defined
 
     root_search_url = "https://scihub.copernicus.eu/dhus/search"
     producttype = "S2MSI2A"

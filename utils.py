@@ -133,17 +133,19 @@ def get_tile(tile_data):
 
     size_byte = 0.0
     tick = 0
-    with open(f'{tile_title}.zip', "wb") as fd:
-        for chunk in response.iter_content(chunk_size=2048):
-            fd.write(chunk)
-            size_byte += 2048
-            percentage = ((size_byte / (1024 ** 3)) / tile_size * 100)
-            if (percentage - tick) > 0:
-                print("\r", "Downloading: ", f"{tick:3d} %", f' ({tile_title})', end="")
-                tick += 1
+    try:
+        with open(f'{tile_title}.zip', "x") as fd:
+            for chunk in response.iter_content(chunk_size=2048):
+                fd.write(chunk)
+                size_byte += 2048
+                percentage = ((size_byte / (1024 ** 3)) / tile_size * 100)
+                if (percentage - tick) > 0:
+                    print("\r", "Downloading: ", f"{tick:3d} %", f' ({tile_title})', end="")
+                    tick += 1
 
-        print("\r", "Copleted downloading", f' {tile_title}', end="")
-
+            print("\r", "Completed downloading", f' {tile_title}', end="")
+    except FileExistsError:
+        print(f'{tile_title} already downloaded.')
 
 if __name__ == '__main__':
     pass
