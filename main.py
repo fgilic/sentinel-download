@@ -1,3 +1,5 @@
+import sys
+
 from utils import build_search_params, get_response, get_xml_root, parse_search_results, get_tile
 
 
@@ -24,6 +26,11 @@ if __name__ == '__main__':
     total_results = int(
         xml_root.find("{http://a9.com/-/spec/opensearch/1.1/}totalResults").text
     )
+
+    if total_results == 0:
+        print("No results with provided search parameters.")
+        sys.exit()
+
     print(f"URI: {search_response.url}\n")
     print(f"Total results: {total_results}")
 

@@ -1,3 +1,4 @@
+import hashlib
 import sys
 import time
 
@@ -98,7 +99,7 @@ def parse_search_results(xml_root):
                 size = item.text
                 continue
             if item.attrib["name"] == "footprint":
-                # sometimes polygon, sometimes multipolygon type
+                # TODO sometimes polygon, sometimes multipolygon type
                 polygon = wkt.loads(item.text)
                 continue
             if item.attrib["name"] == "platformidentifier":
@@ -124,6 +125,46 @@ def parse_search_results(xml_root):
     return entries
 
 
+def get_md5_checksum(file_name):
+    # https: // stackoverflow.com / questions / 16874598 / how - do - i - calculate - the - md5 - checksum - of - a - file - in -python
+    # https://stackoverflow.com/questions/3431825/generating-an-md5-checksum-of-a-file/3431838#3431838
+    hash_md5 = hashlib.md5()
+    with open(file_name, "rb") as file:
+        for chunk in iter(lambda: file.read(4096), b""):
+            hash_md5.update(chunk)
+    return hash_md5.hexdigest()
+
+
+def download_tile(response, tile_size, tile_title, tile_md5_checksum):
+    # checks if file is already downloaded, and if it is and it has a valid MD5 checksum, than execution stops
+    try:
+        open(f'{tile_title}.zip', "xb")
+    except FileExistsError:
+        if tile_md5_checksum == get_md5_checksum(f'{tile_title}.zip'):
+            print(f'{tile_title} already downloaded.')
+            raise
+
+    size_byte = 0.0
+    tick = 0
+    with open(f'{tile_title}.zip', "wb") as fd:
+        for chunk in response.iter_content(chunk_size=2048):
+            fd.write(chunk)
+            size_byte += 2048
+            percentage = ((size_byte / (1024 ** 3)) / tile_size * 100)
+            if (percentage - tick) > 0:
+                print("\r", "Downloading: ", f"{tick:3d} %", f' ({tile_title})', end="")
+                tick += 1
+
+        print("\r", "Completed downloading", f' {tile_title}', end="")
+
+    if get_md5_checksum(f'{tile_title}.zip') != tile_md5_checksum:
+        print("Download integrity problem (reported and calculated MD5 checksums are incompatible).")
+        y_n = input("Reattempt download [Y/n]? ")
+        if y_n == "Y" or "y":
+            download_tile(response, tile_size, tile_title, tile_md5_checksum)
+        sys.exit()
+
+
 def get_tile(tile_data):
     download_uri = tile_data["download_uri"]
     tile_title = tile_data["title"]
@@ -133,6 +174,9 @@ def get_tile(tile_data):
         tile_size = float(tile_data["size"].split(" ")[0])
     elif tile_size_unit == "MB":
         tile_size = float(tile_data["size"].split(" ")[0]) / 1000
+    else:
+        # TODO
+        pass
     response = get_response(download_uri, stream=True)
 
     # try:
@@ -141,7 +185,7 @@ def get_tile(tile_data):
     #    pass
     while response.status_code == 202:
         print(f"Tile {tile_title} is offline. Retrieval request has been successfully submitted.")
-        print(f"Download reatempt in 10 minutes.", end="")
+        print(f"Download reattempt in 10 minutes.", end="")
 
         for i in range(10):
             if i == 9:
@@ -154,21 +198,9 @@ def get_tile(tile_data):
 
         response = get_response(download_uri, stream=True)
 
-    size_byte = 0.0
-    tick = 0
-    try:
-        with open(f'{tile_title}.zip', "xb") as fd:
-            for chunk in response.iter_content(chunk_size=2048):
-                fd.write(chunk)
-                size_byte += 2048
-                percentage = ((size_byte / (1024 ** 3)) / tile_size * 100)
-                if (percentage - tick) > 0:
-                    print("\r", "Downloading: ", f"{tick:3d} %", f' ({tile_title})', end="")
-                    tick += 1
+    tile_md5_checksum = get_response(download_uri.replace("$value", "Checksum/Value/$value")).text
+    download_tile(response, tile_size, tile_title, tile_md5_checksum)
 
-            print("\r", "Completed downloading", f' {tile_title}', end="")
-    except FileExistsError:
-        print(f'{tile_title} already downloaded.')
 
 if __name__ == '__main__':
     pass
