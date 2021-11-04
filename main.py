@@ -5,7 +5,7 @@ if __name__ == '__main__':
     rows = 10  # 10 is also default if not defined, max is 100
     start = 0  # 0 is also default if not defined
 
-    root_search_url = "https://scihub.copernicus.eu/dhus/search"
+    root_search_uri = "https://scihub.copernicus.eu/dhus/search"
     producttype = "S2MSI2A"
     # beginposition = "[NOW-9MONTHS TO NOW]"
     beginposition = "[2020-08-01T00:00:00.000Z TO 2020-08-31T00:00:00.000Z]"
@@ -18,7 +18,7 @@ if __name__ == '__main__':
 
     search_params = build_search_params(rows, start, producttype, beginposition, footprint, cloudcoverpercentage)
 
-    search_response = get_response(root_search_url, search_params)
+    search_response = get_response(root_search_uri, search_params)
     xml_root = check_response_content(search_response)
     all_entries = []
     total_results = int(
@@ -35,7 +35,7 @@ if __name__ == '__main__':
             search_params = build_search_params(
                 rows, start, producttype, beginposition, footprint, cloudcoverpercentage
             )
-            search_response = get_response(root_search_url, search_params)
+            search_response = get_response(root_search_uri, search_params)
             xml_root = check_response_content(search_response)
             all_entries += parse_search_results(xml_root)
             start += 10

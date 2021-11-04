@@ -44,6 +44,8 @@ def get_response(root_url, params="", stream=False):
         raise
     except requests.exceptions.HTTPError:
         print(f"HTTP error, status code: {response.status_code}")
+        if response.status_code == 401 and response.reason == "Unauthorized":
+            print("Check you username and password.")
         raise
 
 
