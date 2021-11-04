@@ -1,4 +1,4 @@
-from utils import build_search_params, get_response, check_response_content, parse_search_results, get_tile
+from utils import build_search_params, get_response, get_xml_root, parse_search_results, get_tile
 
 
 if __name__ == '__main__':
@@ -19,7 +19,7 @@ if __name__ == '__main__':
     search_params = build_search_params(rows, start, producttype, beginposition, footprint, cloudcoverpercentage)
 
     search_response = get_response(root_search_uri, search_params)
-    xml_root = check_response_content(search_response)
+    xml_root = get_xml_root(search_response)
     all_entries = []
     total_results = int(
         xml_root.find("{http://a9.com/-/spec/opensearch/1.1/}totalResults").text
@@ -36,7 +36,7 @@ if __name__ == '__main__':
                 rows, start, producttype, beginposition, footprint, cloudcoverpercentage
             )
             search_response = get_response(root_search_uri, search_params)
-            xml_root = check_response_content(search_response)
+            xml_root = get_xml_root(search_response)
             all_entries += parse_search_results(xml_root)
             start += 10
 

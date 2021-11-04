@@ -1,4 +1,5 @@
 import sys
+import time
 
 import xml.etree.ElementTree as ET
 import pyproj
@@ -49,7 +50,7 @@ def get_response(root_url, params="", stream=False):
         raise
 
 
-def check_response_content(response):
+def get_xml_root(response):
     root = ET.fromstring(response.content)
 
     if root[0].tag == "{http://www.w3.org/2005/Atom}error":
@@ -66,7 +67,7 @@ def check_response_content(response):
 def parse_search_results(xml_root):
     entries = []
     for entry in xml_root.findall("{http://www.w3.org/2005/Atom}entry"):
-        link = entry.find("{http://www.w3.org/2005/Atom}link").attrib["href"]
+        download_uri = entry.find("{http://www.w3.org/2005/Atom}link").attrib["href"]
         title = entry.find("{http://www.w3.org/2005/Atom}title").text
         tile_id = entry.find("{http://www.w3.org/2005/Atom}id").text
 
@@ -97,7 +98,8 @@ def parse_search_results(xml_root):
                 size = item.text
                 continue
             if item.attrib["name"] == "footprint":
-                polygon = wkt.loads(item.text)[0]
+                # sometimes polygon, sometimes multipolygon type
+                polygon = wkt.loads(item.text)
                 continue
             if item.attrib["name"] == "platformidentifier":
                 platform_id = item.text
@@ -111,7 +113,7 @@ def parse_search_results(xml_root):
                 "beginposition": beginposition,
                 "cloudcoverpercentage": cloudcoverpercentage_,
                 "relativeorbitnumber": relativeorbitnumber,
-                "link": link,
+                "download_uri": download_uri,
                 "size": size,
                 "title": title,
                 "footprint": polygon,
@@ -123,20 +125,39 @@ def parse_search_results(xml_root):
 
 
 def get_tile(tile_data):
-    tile_url = tile_data['link']
+    download_uri = tile_data["download_uri"]
     tile_title = tile_data["title"]
-    tile_size = float(tile_data["size"].split(" ")[0])
-    response = get_response(tile_url, stream=True)
+    tile_size_unit = tile_data["size"].split(" ")[1]
+
+    if tile_size_unit == "GB":
+        tile_size = float(tile_data["size"].split(" ")[0])
+    elif tile_size_unit == "MB":
+        tile_size = float(tile_data["size"].split(" ")[0]) / 1000
+    response = get_response(download_uri, stream=True)
 
     # try:
     #    check_response_content(response)
     # except ET.ParseError:
     #    pass
+    while response.status_code == 202:
+        print(f"Tile {tile_title} is offline. Retrieval request has been successfully submitted.")
+        print(f"Download reatempt in 10 minutes.", end="")
+
+        for i in range(10):
+            if i == 9:
+                print("\r", "Download reattempt in 10 minutes (less than 1 minute left).", end="")
+                time.sleep(60)
+                print("\r", "Download reattempt in 10 minutes.")
+            else:
+                print("\r", f"Download reattempt in 10 minutes ({10-i} minutes left).", end="")
+                time.sleep(60)
+
+        response = get_response(download_uri, stream=True)
 
     size_byte = 0.0
     tick = 0
     try:
-        with open(f'{tile_title}.zip', "x") as fd:
+        with open(f'{tile_title}.zip', "xb") as fd:
             for chunk in response.iter_content(chunk_size=2048):
                 fd.write(chunk)
                 size_byte += 2048
