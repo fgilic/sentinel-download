@@ -1,6 +1,6 @@
 import sys
 
-from utils import build_search_params, get_response, get_xml_root, parse_search_results, get_tile
+from utils import build_search_params, get_response, get_xml_root, parse_search_results, get_safe_file
 
 
 if __name__ == '__main__':
@@ -10,7 +10,7 @@ if __name__ == '__main__':
     root_search_uri = "https://scihub.copernicus.eu/dhus/search"
     producttype = "S2MSI2A"
     # beginposition = "[NOW-9MONTHS TO NOW]"
-    beginposition = "[2020-08-01T00:00:00.000Z TO 2020-08-31T00:00:00.000Z]"
+    beginposition = "[2019-07-01T00:00:00.000Z TO 2019-08-31T00:00:00.000Z]"
     # point: '(Lat, Long)'; polygon: 'POLYGON((Long1 Lat1, Long2 Lat2, ..., Long1 Lat1))'
     # Lat and Long in decimal degrees
     # http://arthur-e.github.io/Wicket/sandbox-gmaps3.html
@@ -50,4 +50,4 @@ if __name__ == '__main__':
     # sorting entries by cloudcoverpercentage, ascending
     all_entries.sort(key=lambda cover_percentage: cover_percentage["cloudcoverpercentage"])
 
-    get_tile(all_entries[0])
+    get_safe_file(all_entries[0])
