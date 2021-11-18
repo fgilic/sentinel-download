@@ -143,9 +143,10 @@ def get_bands_metadata(manifest_download_uri, bands_no):
         band_metadata = {}
         band_metadata["id"] = data_object.attrib["ID"]
         band_metadata["size"] = int(data_object.find("byteStream").get("size"))
-        band_metadata["check_sum"] = data_object.find("byteStream").find("checksum").text
+        band_metadata["file_location"] = data_object.find("byteStream").find("fileLocation").get("href")
+        band_metadata["checksum"] = data_object.find("byteStream").find("checksum").text
 
-        band_metadata["band_no"] = "-"
+        band_metadata["band_no"] = None
         for band_no in bands_no:
             if f"Band_{band_no}" in band_metadata["id"]:
                 band_metadata["band_no"] = band_no
@@ -156,43 +157,57 @@ def get_bands_metadata(manifest_download_uri, bands_no):
     return bands_metadata
 
 
-def download_bands(response, safe_file_size, safe_file_title, safe_file_md5_checksum):
-    # checks if file is already downloaded, and if it is and it has a valid MD5 checksum, than execution stops
-    # try:
-    #     open(f'{safe_file_title}.zip', "xb")
-    # except FileExistsError:
-    #     if safe_file_md5_checksum == get_md5_checksum(f'{safe_file_title}.zip'):
-    #         print(f'{safe_file_title} already downloaded.')
-    #         raise
+def download_band(download_uri, band_file_name, size, checksum):
+    # checks if file is already downloaded, and if it is and it has a valid MD5 checksum, than it doesn't download band
+    try:
+        open(f'{band_file_name}', "xb")
+    except FileExistsError:
+        if checksum == get_md5_checksum(f'{band_file_name}'):
+            print(f'{band_file_name} already downloaded.')
+            return
 
-    size_byte = 0.0
+    size_downloaded = 0.0
     tick = 0
-    with open(f'{safe_file_title}.zip', "wb") as fd:
+    response = get_response(download_uri, stream=True)
+    with open(f'{band_file_name}', "wb") as fd:
         for chunk in response.iter_content(chunk_size=2048):
             fd.write(chunk)
-            size_byte += 2048
-            percentage = ((size_byte / (1024 ** 3)) / safe_file_size * 100)
+            size_downloaded += 2048
+            percentage = size_downloaded / size * 100
             if (percentage - tick) > 0:
-                print("\r", "Downloading: ", f"{tick:3d} %", f' ({safe_file_title})', end="")
+                print("\r", "Downloading: ", f"{tick:2d} %", f' ({band_file_name})', end="")
                 tick += 1
 
-        print("\r", "Completed downloading", f' {safe_file_title}', end="")
+        print("\r", "Completed downloading", f' {band_file_name}')
 
-    # TODO check checksum for each band (found in manifest.safe)
-    if get_md5_checksum(f'{safe_file_title}.zip') != safe_file_md5_checksum:
+    if get_md5_checksum(f'{band_file_name}') != checksum:
         print("Download integrity problem (reported and calculated MD5 checksums are different).")
         y_n = input("Reattempt download [Y/n]? ")
         if y_n == "Y" or "y":
-            download_bands(response, safe_file_size, safe_file_title, safe_file_md5_checksum)
-        sys.exit()
+            download_band(download_uri, band_file_name, size, checksum)
 
 
-def get_bands(safe_file_data, bands):
-    download_uri = safe_file_data["download_uri"]
+def download_bands(safe_file_download_uri, safe_file_title, bands_metadata):
+
+    downloaded_files = []
+    for band_metadata in bands_metadata:
+        if band_metadata["band_no"] is not None:
+            tile_folder_name = band_metadata["file_location"].split("/")[2]
+            band_file_name = band_metadata["file_location"].split("/")[-1]
+            resolution_folder = "R" + band_metadata["band_no"].split("_")[1]
+            # https://scihub.copernicus.eu/dhus/odata/v1/Products('aeff9a9c-5bf1-425c-8256-d26391156116')/Nodes('S2B_MSIL2A_20200822T094039_N0214_R036_T33TYH_20200822T115325.SAFE')/Nodes('GRANULE')/Nodes('L2A_T33TYH_A018080_20200822T094034')/Nodes('IMG_DATA')/Nodes('R10m')/Nodes('T33TYH_20200822T094039_B02_10m.jp2')/
+            band_download_uri = safe_file_download_uri.replace("$value", f"Nodes('{safe_file_title}')/Nodes('GRANULE')/Nodes('{tile_folder_name}')/Nodes('IMG_DATA')/Nodes('{resolution_folder}')/Nodes('{band_file_name}')/$value")
+            download_band(band_download_uri, band_file_name, band_metadata["size"], band_metadata["checksum"])
+
+            downloaded_files.append(band_file_name)
+
+
+def get_bands(safe_file_data, bands_no):
+    safe_file_download_uri = safe_file_data["download_uri"]
     safe_file_title = safe_file_data["title"]
-    manifest_download_uri = download_uri.replace("$value", f"Nodes('{safe_file_title}')/Nodes('manifest.safe')/$value")
+    manifest_download_uri = safe_file_download_uri.replace("$value", f"Nodes('{safe_file_title}')/Nodes('manifest.safe')/$value")
 
-    response = get_response(download_uri, stream=True)
+    response = get_response(safe_file_download_uri, stream=True)
 
     while response.status_code == 202:
         print(f"SAFE file {safe_file_title} is offline. Retrieval request has been successfully submitted.")
@@ -207,17 +222,16 @@ def get_bands(safe_file_data, bands):
                 print("\r", f"Download reattempt in 10 minutes ({10-i} minutes left).", end="")
                 time.sleep(60)
 
-        response = get_response(download_uri, stream=True)
+        response = get_response(safe_file_download_uri, stream=True)
 
-    bands_metadata = get_bands_metadata(manifest_download_uri, bands)
+    bands_metadata = get_bands_metadata(manifest_download_uri, bands_no)
 
     # try:
     #    check_response_content(response)
     # except ET.ParseError:
     #    pass
 
-    safe_file_md5_checksum = get_response(download_uri.replace("$value", "Checksum/Value/$value")).text
-    download_bands(response, safe_file_size, safe_file_title, safe_file_md5_checksum)
+    download_bands(safe_file_download_uri, safe_file_title, bands_metadata)
 
 
 if __name__ == '__main__':
