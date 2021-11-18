@@ -1,6 +1,6 @@
 import sys
 
-from utils import build_search_params, get_response, get_xml_root, parse_search_results, get_tile
+from utils import build_search_params, get_response, get_xml_root, parse_search_results, get_bands
 
 
 if __name__ == '__main__':
@@ -17,7 +17,7 @@ if __name__ == '__main__':
     # footprint = "POLYGON((16.1430 43.3531, 16.7802 43.3531, 16.7802 43.6489, 16.1430 43.6489, 16.1430 43.3531))"
     footprint = "42.807492, 18.264526"
     cloudcoverpercentage = "[0 TO 15]"
-
+    bands_no = ["B02_10m", "B03_10m", "B04_10m"]
     search_params = build_search_params(rows, start, producttype, beginposition, footprint, cloudcoverpercentage)
 
     search_response = get_response(root_search_uri, search_params)
@@ -50,4 +50,4 @@ if __name__ == '__main__':
     # sorting entries by cloudcoverpercentage, ascending
     all_entries.sort(key=lambda cover_percentage: cover_percentage["cloudcoverpercentage"])
 
-    get_tile(all_entries[0])
+    get_bands(all_entries[0], bands_no)

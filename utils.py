@@ -39,7 +39,7 @@ def get_response(root_url, params="", stream=False):
 
         return response
     except requests.exceptions.Timeout:
-        print(f"Request timed out. ({connect_timeout})")
+        print(f"Request timed out. (connection timeout: {connect_timeout} s, read timeout: {read_timeout} s)")
         raise
     except requests.exceptions.ConnectionError:
         print("Connection error. Check internet connection and URL.")
@@ -47,7 +47,7 @@ def get_response(root_url, params="", stream=False):
     except requests.exceptions.HTTPError:
         print(f"HTTP error, status code: {response.status_code}")
         if response.status_code == 401 and response.reason == "Unauthorized":
-            print("Check you username and password.")
+            print("Check your username and password.")
         raise
 
 
@@ -69,8 +69,8 @@ def parse_search_results(xml_root):
     entries = []
     for entry in xml_root.findall("{http://www.w3.org/2005/Atom}entry"):
         download_uri = entry.find("{http://www.w3.org/2005/Atom}link").attrib["href"]
-        title = entry.find("{http://www.w3.org/2005/Atom}title").text
-        tile_id = entry.find("{http://www.w3.org/2005/Atom}id").text
+        safe_file_title = entry.find("{http://www.w3.org/2005/Atom}title").text + ".SAFE"
+        safe_file_id = entry.find("{http://www.w3.org/2005/Atom}id").text
 
         cloudcoverpercentage_ = None
         for item in entry.findall("{http://www.w3.org/2005/Atom}double"):
@@ -91,7 +91,7 @@ def parse_search_results(xml_root):
                 break
 
         size = None
-        polygon = None
+        footprint = None
         platform_id = None
         orbit_direction = None
         for item in entry.findall("{http://www.w3.org/2005/Atom}str"):
@@ -100,7 +100,7 @@ def parse_search_results(xml_root):
                 continue
             if item.attrib["name"] == "footprint":
                 # TODO sometimes polygon, sometimes multipolygon type
-                polygon = wkt.loads(item.text)
+                footprint = wkt.loads(item.text)
                 continue
             if item.attrib["name"] == "platformidentifier":
                 platform_id = item.text
@@ -110,14 +110,14 @@ def parse_search_results(xml_root):
 
         entries.append(
             {
-                "id": tile_id,
+                "id": safe_file_id,
                 "beginposition": beginposition,
                 "cloudcoverpercentage": cloudcoverpercentage_,
                 "relativeorbitnumber": relativeorbitnumber,
                 "download_uri": download_uri,
                 "size": size,
-                "title": title,
-                "footprint": polygon,
+                "title": safe_file_title,
+                "footprint": footprint,
                 "platformidentifier": platform_id,
                 "orbit_direction": orbit_direction,
             }
@@ -135,56 +135,67 @@ def get_md5_checksum(file_name):
     return hash_md5.hexdigest()
 
 
-def download_tile(response, tile_size, tile_title, tile_md5_checksum):
+def get_bands_metadata(manifest_download_uri, bands_no):
+    response = get_response(manifest_download_uri)
+    root = get_xml_root(response)
+    bands_metadata = []
+    for data_object in root.iter('dataObject'):
+        band_metadata = {}
+        band_metadata["id"] = data_object.attrib["ID"]
+        band_metadata["size"] = int(data_object.find("byteStream").get("size"))
+        band_metadata["check_sum"] = data_object.find("byteStream").find("checksum").text
+
+        band_metadata["band_no"] = "-"
+        for band_no in bands_no:
+            if f"Band_{band_no}" in band_metadata["id"]:
+                band_metadata["band_no"] = band_no
+                break
+
+        bands_metadata.append(band_metadata)
+
+    return bands_metadata
+
+
+def download_bands(response, safe_file_size, safe_file_title, safe_file_md5_checksum):
     # checks if file is already downloaded, and if it is and it has a valid MD5 checksum, than execution stops
-    try:
-        open(f'{tile_title}.zip', "xb")
-    except FileExistsError:
-        if tile_md5_checksum == get_md5_checksum(f'{tile_title}.zip'):
-            print(f'{tile_title} already downloaded.')
-            raise
+    # try:
+    #     open(f'{safe_file_title}.zip', "xb")
+    # except FileExistsError:
+    #     if safe_file_md5_checksum == get_md5_checksum(f'{safe_file_title}.zip'):
+    #         print(f'{safe_file_title} already downloaded.')
+    #         raise
 
     size_byte = 0.0
     tick = 0
-    with open(f'{tile_title}.zip', "wb") as fd:
+    with open(f'{safe_file_title}.zip', "wb") as fd:
         for chunk in response.iter_content(chunk_size=2048):
             fd.write(chunk)
             size_byte += 2048
-            percentage = ((size_byte / (1024 ** 3)) / tile_size * 100)
+            percentage = ((size_byte / (1024 ** 3)) / safe_file_size * 100)
             if (percentage - tick) > 0:
-                print("\r", "Downloading: ", f"{tick:3d} %", f' ({tile_title})', end="")
+                print("\r", "Downloading: ", f"{tick:3d} %", f' ({safe_file_title})', end="")
                 tick += 1
 
-        print("\r", "Completed downloading", f' {tile_title}', end="")
+        print("\r", "Completed downloading", f' {safe_file_title}', end="")
 
-    if get_md5_checksum(f'{tile_title}.zip') != tile_md5_checksum:
-        print("Download integrity problem (reported and calculated MD5 checksums are incompatible).")
+    # TODO check checksum for each band (found in manifest.safe)
+    if get_md5_checksum(f'{safe_file_title}.zip') != safe_file_md5_checksum:
+        print("Download integrity problem (reported and calculated MD5 checksums are different).")
         y_n = input("Reattempt download [Y/n]? ")
         if y_n == "Y" or "y":
-            download_tile(response, tile_size, tile_title, tile_md5_checksum)
+            download_bands(response, safe_file_size, safe_file_title, safe_file_md5_checksum)
         sys.exit()
 
 
-def get_tile(tile_data):
-    download_uri = tile_data["download_uri"]
-    tile_title = tile_data["title"]
-    tile_size_unit = tile_data["size"].split(" ")[1]
+def get_bands(safe_file_data, bands):
+    download_uri = safe_file_data["download_uri"]
+    safe_file_title = safe_file_data["title"]
+    manifest_download_uri = download_uri.replace("$value", f"Nodes('{safe_file_title}')/Nodes('manifest.safe')/$value")
 
-    if tile_size_unit == "GB":
-        tile_size = float(tile_data["size"].split(" ")[0])
-    elif tile_size_unit == "MB":
-        tile_size = float(tile_data["size"].split(" ")[0]) / 1000
-    else:
-        # TODO
-        pass
     response = get_response(download_uri, stream=True)
 
-    # try:
-    #    check_response_content(response)
-    # except ET.ParseError:
-    #    pass
     while response.status_code == 202:
-        print(f"Tile {tile_title} is offline. Retrieval request has been successfully submitted.")
+        print(f"SAFE file {safe_file_title} is offline. Retrieval request has been successfully submitted.")
         print(f"Download reattempt in 10 minutes.", end="")
 
         for i in range(10):
@@ -198,8 +209,15 @@ def get_tile(tile_data):
 
         response = get_response(download_uri, stream=True)
 
-    tile_md5_checksum = get_response(download_uri.replace("$value", "Checksum/Value/$value")).text
-    download_tile(response, tile_size, tile_title, tile_md5_checksum)
+    bands_metadata = get_bands_metadata(manifest_download_uri, bands)
+
+    # try:
+    #    check_response_content(response)
+    # except ET.ParseError:
+    #    pass
+
+    safe_file_md5_checksum = get_response(download_uri.replace("$value", "Checksum/Value/$value")).text
+    download_bands(response, safe_file_size, safe_file_title, safe_file_md5_checksum)
 
 
 if __name__ == '__main__':
