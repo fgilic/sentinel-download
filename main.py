@@ -11,47 +11,49 @@ if __name__ == '__main__':
     root_search_uri = "https://scihub.copernicus.eu/dhus/search"
     producttype = "S2MSI2A"
     # beginposition = "[NOW-9MONTHS TO NOW]"
-    beginposition = "[2020-08-01T00:00:00.000Z TO 2020-08-31T00:00:00.000Z]"
+    beginposition = "[2021-08-01T00:00:00.000Z TO 2021-08-31T00:00:00.000Z]"
     # point: '(Lat, Long)'; polygon: 'POLYGON((Long1 Lat1, Long2 Lat2, ..., Long1 Lat1))'
     # Lat and Long in decimal degrees
     # http://arthur-e.github.io/Wicket/sandbox-gmaps3.html
     # footprint = "POLYGON((16.1430 43.3531, 16.7802 43.3531, 16.7802 43.6489, 16.1430 43.6489, 16.1430 43.3531))"
-    footprint = "42.807492, 18.264526"
+    footprint = ["44.65, 15.60", "44.65, 16.93", "43.74, 15.60", "43.74, 16.93"]
     cloudcoverpercentage = "[0 TO 15]"
     bands_no = ["B02_10m", "B03_10m", "B04_10m"]
     root_download_folder = "D:\\2-S2-mosaick\\bands"
-    search_params = build_search_params(rows, start, producttype, beginposition, footprint, cloudcoverpercentage)
 
-    search_response = get_response(root_search_uri, search_params)
-    xml_root = get_xml_root(search_response)
-    all_entries = []
-    total_results = int(
-        xml_root.find("{http://a9.com/-/spec/opensearch/1.1/}totalResults").text
-    )
+    for point in footprint:
+        search_params = build_search_params(rows, start, producttype, beginposition, point, cloudcoverpercentage)
 
-    if total_results == 0:
-        print("No results with provided search parameters.")
-        sys.exit()
+        search_response = get_response(root_search_uri, search_params)
+        xml_root = get_xml_root(search_response)
+        all_entries = []
+        total_results = int(
+            xml_root.find("{http://a9.com/-/spec/opensearch/1.1/}totalResults").text
+        )
 
-    print(f"URI: {search_response.url}\n")
-    print(f"Total results: {total_results}")
+        if total_results == 0:
+            print("No results with provided search parameters.")
+            sys.exit()
 
-    all_entries += parse_search_results(xml_root)
+        print(f"\nSearch URI: {search_response.url}")
+        print(f"Total results: {total_results}")
 
-    if total_results > rows:
-        start += 10
-        while start < total_results:
-            search_params = build_search_params(
-                rows, start, producttype, beginposition, footprint, cloudcoverpercentage
-            )
-            search_response = get_response(root_search_uri, search_params)
-            xml_root = get_xml_root(search_response)
-            all_entries += parse_search_results(xml_root)
+        all_entries += parse_search_results(xml_root)
+
+        if total_results > rows:
             start += 10
+            while start < total_results:
+                search_params = build_search_params(
+                    rows, start, producttype, beginposition, footprint, cloudcoverpercentage
+                )
+                search_response = get_response(root_search_uri, search_params)
+                xml_root = get_xml_root(search_response)
+                all_entries += parse_search_results(xml_root)
+                start += 10
 
-    # sorting entries by cloudcoverpercentage, ascending
-    all_entries.sort(key=lambda cover_percentage: cover_percentage["cloudcoverpercentage"])
+        # sorting entries by cloudcoverpercentage, ascending
+        all_entries.sort(key=lambda cover_percentage: cover_percentage["cloudcoverpercentage"])
+        print ("Product id: " + all_entries[0]["id"])
+        downloaded_files = get_bands(all_entries[0], bands_no, root_download_folder)
 
-    downloaded_files = get_bands(all_entries[0], bands_no, root_download_folder)
-
-    create_rgb_composite(downloaded_files, root_download_folder)
+        create_rgb_composite(downloaded_files, root_download_folder)

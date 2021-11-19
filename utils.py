@@ -129,14 +129,27 @@ def parse_search_results(xml_root):
 def build_rgb_composite():
     pass
 
-def get_md5_checksum(file_name):
+
+def get_checksum(file_name, checksum_name):
     # https: // stackoverflow.com / questions / 16874598 / how - do - i - calculate - the - md5 - checksum - of - a - file - in -python
     # https://stackoverflow.com/questions/3431825/generating-an-md5-checksum-of-a-file/3431838#3431838
-    hash_md5 = hashlib.md5()
-    with open(file_name, "rb") as file:
-        for chunk in iter(lambda: file.read(4096), b""):
-            hash_md5.update(chunk)
-    return hash_md5.hexdigest()
+    if checksum_name == "MD5":
+        hash_md5 = hashlib.md5()
+        with open(file_name, "rb") as file:
+            for chunk in iter(lambda: file.read(4096), b""):
+                hash_md5.update(chunk)
+        return hash_md5.hexdigest()
+
+    elif checksum_name == "SHA3-256":
+        hash_sha3_256 = hashlib.sha3_256()
+        with open(file_name, "rb") as file:
+            for chunk in iter(lambda: file.read(4096), b""):
+                hash_sha3_256.update(chunk)
+        return hash_sha3_256.hexdigest()
+    else:
+        # TODO
+        print(f"Unexpected checksum_name (hash algorithm): {checksum_name}")
+        sys.exit()
 
 
 def get_bands_metadata(manifest_download_uri, bands_no):
@@ -148,7 +161,8 @@ def get_bands_metadata(manifest_download_uri, bands_no):
         band_metadata["id"] = data_object.attrib["ID"]
         band_metadata["size"] = int(data_object.find("byteStream").get("size"))
         band_metadata["file_location"] = data_object.find("byteStream").find("fileLocation").get("href")
-        band_metadata["checksum"] = data_object.find("byteStream").find("checksum").text
+        band_metadata["checksum_name"] = data_object.find("byteStream").find("checksum").get("checksumName")
+        band_metadata["checksum"] = data_object.find("byteStream").find("checksum").text.lower()
 
         band_metadata["band_no"] = None
         for band_no in bands_no:
@@ -161,13 +175,13 @@ def get_bands_metadata(manifest_download_uri, bands_no):
     return bands_metadata
 
 
-def download_band(download_uri, root_download_folder, band_file_name, size, checksum):
+def download_band(download_uri, root_download_folder, band_file_name, size, checksum, checksum_name):
     # checks if file is already downloaded, and if it is and it has a valid MD5 checksum, than it doesn't download band
     try:
         open(f'{root_download_folder}\\{band_file_name}', "xb")
     except FileExistsError:
-        if checksum == get_md5_checksum(f'{root_download_folder}\\{band_file_name}'):
-            print(f'{band_file_name} already downloaded.')
+        if checksum == get_checksum(f'{root_download_folder}\\{band_file_name}', checksum_name):
+            print(f' {band_file_name} already downloaded.')
             return
 
     size_downloaded = 0.0
@@ -184,10 +198,10 @@ def download_band(download_uri, root_download_folder, band_file_name, size, chec
 
         print("\r", "Completed downloading", f' {band_file_name}')
 
-    if get_md5_checksum(f'{root_download_folder}\\{band_file_name}') != checksum:
-        print("Download integrity problem (reported and calculated MD5 checksums are different).")
+    if get_checksum(f'{root_download_folder}\\{band_file_name}', checksum_name) != checksum:
+        print("Download integrity problem (reported and calculated checksums are different).")
         y_n = input("Reattempt download [Y/n]? ")
-        if y_n == "Y" or "y":
+        if y_n == "Y" or y_n == "y":
             download_band(download_uri, root_download_folder, band_file_name, size, checksum)
 
 
@@ -201,7 +215,7 @@ def download_bands(safe_file_download_uri, safe_file_title, bands_metadata, root
             resolution_folder = "R" + band_metadata["band_no"].split("_")[1]
             # https://scihub.copernicus.eu/dhus/odata/v1/Products('aeff9a9c-5bf1-425c-8256-d26391156116')/Nodes('S2B_MSIL2A_20200822T094039_N0214_R036_T33TYH_20200822T115325.SAFE')/Nodes('GRANULE')/Nodes('L2A_T33TYH_A018080_20200822T094034')/Nodes('IMG_DATA')/Nodes('R10m')/Nodes('T33TYH_20200822T094039_B02_10m.jp2')/
             band_download_uri = safe_file_download_uri.replace("$value", f"Nodes('{safe_file_title}')/Nodes('GRANULE')/Nodes('{tile_folder_name}')/Nodes('IMG_DATA')/Nodes('{resolution_folder}')/Nodes('{band_file_name}')/$value")
-            download_band(band_download_uri, root_download_folder, band_file_name, band_metadata["size"], band_metadata["checksum"])
+            download_band(band_download_uri, root_download_folder, band_file_name, band_metadata["size"], band_metadata["checksum"], band_metadata["checksum_name"])
 
             downloaded_files.append(band_file_name)
 
