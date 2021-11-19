@@ -3,6 +3,7 @@ import sys
 import time
 
 import xml.etree.ElementTree as ET
+import rasterio
 import pyproj
 from shapely import wkt
 from shapely.ops import transform
@@ -125,6 +126,9 @@ def parse_search_results(xml_root):
     return entries
 
 
+def build_rgb_composite():
+    pass
+
 def get_md5_checksum(file_name):
     # https: // stackoverflow.com / questions / 16874598 / how - do - i - calculate - the - md5 - checksum - of - a - file - in -python
     # https://stackoverflow.com/questions/3431825/generating-an-md5-checksum-of-a-file/3431838#3431838
@@ -157,19 +161,19 @@ def get_bands_metadata(manifest_download_uri, bands_no):
     return bands_metadata
 
 
-def download_band(download_uri, band_file_name, size, checksum):
+def download_band(download_uri, root_download_folder, band_file_name, size, checksum):
     # checks if file is already downloaded, and if it is and it has a valid MD5 checksum, than it doesn't download band
     try:
-        open(f'{band_file_name}', "xb")
+        open(f'{root_download_folder}\\{band_file_name}', "xb")
     except FileExistsError:
-        if checksum == get_md5_checksum(f'{band_file_name}'):
+        if checksum == get_md5_checksum(f'{root_download_folder}\\{band_file_name}'):
             print(f'{band_file_name} already downloaded.')
             return
 
     size_downloaded = 0.0
     tick = 0
     response = get_response(download_uri, stream=True)
-    with open(f'{band_file_name}', "wb") as fd:
+    with open(f'{root_download_folder}\\{band_file_name}', "wb") as fd:
         for chunk in response.iter_content(chunk_size=2048):
             fd.write(chunk)
             size_downloaded += 2048
@@ -180,14 +184,14 @@ def download_band(download_uri, band_file_name, size, checksum):
 
         print("\r", "Completed downloading", f' {band_file_name}')
 
-    if get_md5_checksum(f'{band_file_name}') != checksum:
+    if get_md5_checksum(f'{root_download_folder}\\{band_file_name}') != checksum:
         print("Download integrity problem (reported and calculated MD5 checksums are different).")
         y_n = input("Reattempt download [Y/n]? ")
         if y_n == "Y" or "y":
-            download_band(download_uri, band_file_name, size, checksum)
+            download_band(download_uri, root_download_folder, band_file_name, size, checksum)
 
 
-def download_bands(safe_file_download_uri, safe_file_title, bands_metadata):
+def download_bands(safe_file_download_uri, safe_file_title, bands_metadata, root_download_folder):
 
     downloaded_files = []
     for band_metadata in bands_metadata:
@@ -197,12 +201,14 @@ def download_bands(safe_file_download_uri, safe_file_title, bands_metadata):
             resolution_folder = "R" + band_metadata["band_no"].split("_")[1]
             # https://scihub.copernicus.eu/dhus/odata/v1/Products('aeff9a9c-5bf1-425c-8256-d26391156116')/Nodes('S2B_MSIL2A_20200822T094039_N0214_R036_T33TYH_20200822T115325.SAFE')/Nodes('GRANULE')/Nodes('L2A_T33TYH_A018080_20200822T094034')/Nodes('IMG_DATA')/Nodes('R10m')/Nodes('T33TYH_20200822T094039_B02_10m.jp2')/
             band_download_uri = safe_file_download_uri.replace("$value", f"Nodes('{safe_file_title}')/Nodes('GRANULE')/Nodes('{tile_folder_name}')/Nodes('IMG_DATA')/Nodes('{resolution_folder}')/Nodes('{band_file_name}')/$value")
-            download_band(band_download_uri, band_file_name, band_metadata["size"], band_metadata["checksum"])
+            download_band(band_download_uri, root_download_folder, band_file_name, band_metadata["size"], band_metadata["checksum"])
 
             downloaded_files.append(band_file_name)
 
+    return downloaded_files
 
-def get_bands(safe_file_data, bands_no):
+
+def get_bands(safe_file_data, bands_no, root_dowload_folder):
     safe_file_download_uri = safe_file_data["download_uri"]
     safe_file_title = safe_file_data["title"]
     manifest_download_uri = safe_file_download_uri.replace("$value", f"Nodes('{safe_file_title}')/Nodes('manifest.safe')/$value")
@@ -231,8 +237,8 @@ def get_bands(safe_file_data, bands_no):
     # except ET.ParseError:
     #    pass
 
-    download_bands(safe_file_download_uri, safe_file_title, bands_metadata)
-
+    downloaded_files = download_bands(safe_file_download_uri, safe_file_title, bands_metadata, root_dowload_folder)
+    return downloaded_files
 
 if __name__ == '__main__':
     pass
