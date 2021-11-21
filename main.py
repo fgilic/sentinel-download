@@ -1,6 +1,6 @@
 import sys
 
-from mosaicking import create_rgb_composite
+from mosaicking import create_rgb_composite, merge_rgb
 from utils import build_search_params, get_response, get_xml_root, parse_search_results, get_bands
 
 
@@ -57,3 +57,5 @@ if __name__ == '__main__':
         downloaded_files = get_bands(all_entries[0], bands_no, root_download_folder)
 
         create_rgb_composite(downloaded_files, root_download_folder)
+
+    merge_rgb()
