@@ -1,3 +1,4 @@
+import csv
 import sys
 
 from mosaicking import create_rgb_composite, merge_rgb
@@ -53,7 +54,8 @@ if __name__ == '__main__':
 
         # sorting entries by cloudcoverpercentage, ascending
         all_entries.sort(key=lambda cover_percentage: cover_percentage["cloudcoverpercentage"])
-        print ("Product id: " + all_entries[0]["id"])
+        print ("Product (SAFE file) id: " + all_entries[0]["safe_file_id"])
+
         downloaded_files = get_bands(all_entries[0], bands_no, root_download_folder)
 
         create_rgb_composite(downloaded_files, root_download_folder)

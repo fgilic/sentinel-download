@@ -1,5 +1,6 @@
 import rasterio.merge
 
+
 def create_rgb_composite(downloaded_files, root_download_folder):
 
     for downloaded_file in downloaded_files:
@@ -10,10 +11,13 @@ def create_rgb_composite(downloaded_files, root_download_folder):
             green = rasterio.open(f"{root_download_folder}\\{downloaded_file}")
         elif "B02_10m" in downloaded_file:
             blue = rasterio.open(f"{root_download_folder}\\{downloaded_file}")
+        else:
+            continue
 
     kwds = red.profile
     kwds['driver'] = 'GTiff'
     kwds['tiled'] = True
+    kwds['nodata'] = 0  # TODO check if nodata is always 0
     kwds['blockxsize'] = 256
     kwds['blockysize'] = 256
     # kwds['photometric'] = 'RGB'
@@ -21,12 +25,18 @@ def create_rgb_composite(downloaded_files, root_download_folder):
     kwds['predictor'] = 2
     kwds['count'] = 3
 
-    # https://gis.stackexchange.com/questions/341809/merging-sentinel-2-rgb-bands-with-rasterio
-    with rasterio.open(composite_path_file_name, "w", **kwds) as composite:
-        composite.write(red.read(1), 1)
-        composite.write(green.read(1), 2)
-        composite.write(blue.read(1), 3)
-        print(f" RGB composite {composite_path_file_name} created.")
+    try:
+        file = open(composite_path_file_name, "x")
+        file.close()
+
+        # https://gis.stackexchange.com/questions/341809/merging-sentinel-2-rgb-bands-with-rasterio
+        with rasterio.open(composite_path_file_name, "w", **kwds) as composite:
+            composite.write(red.read(1), 1)
+            composite.write(green.read(1), 2)
+            composite.write(blue.read(1), 3)
+            print(" RGB composite " + composite_path_file_name.split('\\')[-1] + " created.")
+    except FileExistsError:
+        print(" RGB composite " + composite_path_file_name.split('\\')[-1] + " already created.")
 
 
 def merge_rgb():
@@ -41,6 +51,7 @@ def merge_rgb():
     output_tif.write(output[0][0], 1)
     output_tif.write(output[0][1], 2)
     output_tif.close()
+
 
 if __name__ == '__main__':
     merge_rgb()
