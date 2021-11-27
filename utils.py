@@ -4,6 +4,7 @@ import sys
 import time
 
 import xml.etree.ElementTree as ET
+from shapely.geometry import shape
 import rasterio
 import pyproj
 from shapely import wkt
@@ -18,6 +19,28 @@ import local_settings
 
 USERNAME = local_settings.USERNAME
 PASSWORD = local_settings.PASSWORD
+
+
+def get_intersecting_mgrs_tiles(footprint_polygon_file_path):
+    with open(footprint_polygon_file_path, "r") as footprint_polygon_file:
+        footprint_geometry = shape(json.loads(footprint_polygon_file.read())["features"][0]["geometry"])
+        with open("MGRS_ll.geojson", "r") as mgrs_tiles:
+            mgrs_tiles = json.loads(mgrs_tiles.read())
+            intersecting_tiles = []
+            tiles_utm = []
+            for tile in mgrs_tiles["features"]:
+                tile_geometry = shape(tile["geometry"])
+                if footprint_geometry.intersects(tile_geometry):
+                    centroid = tile["properties"]["centroid_ll"].split(",")
+                    # switch lat and long
+                    # TODO there are some tiles partly on east, partly on west hemisphere
+                    if float(centroid[1]) < 40.0 or float(centroid[1]) > 52.0 or float(centroid[0]) < 12.0 or float(centroid[0]) >20.0:
+                        continue
+                    centroid = f"{centroid[1]},{centroid[0]}"
+                    tile_utm_geometry = wkt.loads(tile["properties"]["UTM_WKT"])
+                    intersecting_tiles.append({"centroid": centroid, "geometry": tile_utm_geometry, "EPSG_code": tile["properties"]["UTM_EPSG"], "MGRS_ID": tile["properties"]["MGRS_ID"]})
+
+    return intersecting_tiles
 
 
 def build_search_params(rows, start, producttype, beginposition, footprint, cloudcoverpercentage):
