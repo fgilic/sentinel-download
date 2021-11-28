@@ -5,10 +5,7 @@ import time
 
 import xml.etree.ElementTree as ET
 from shapely.geometry import shape
-import rasterio
-import pyproj
 from shapely import wkt
-from shapely.ops import transform
 import requests
 
 import local_settings
@@ -251,16 +248,17 @@ def download_bands(safe_file_download_uri, safe_file_name, bands_metadata, root_
         downloaded_files.append(band_file_name)
 
         try:
-            json_file = open(f"{root_download_folder}\\METADATA.json", "x")
-            json_file.write(json.dumps([band_metadata]))
-            json_file.close()
+            with open(f"{root_download_folder}\\METADATA.json", "x") as json_file:
+                json_file.write(json.dumps([band_metadata]))
+                json_file.close()
         except FileExistsError:
-            json_file = open(f"{root_download_folder}\\METADATA.json", "r+")
-            json_file_content = json.loads(json_file.read())
-            json_file.seek(0)
-            json_file_content.append(band_metadata)
-            json_file.write(json.dumps(json_file_content))
-            json_file.close()
+            with open(f"{root_download_folder}\\METADATA.json", "r+") as json_file:
+                json_file_content = json.loads(json_file.read())
+                json_file.seek(0)
+                json_file.truncate(0)
+                json_file_content.append(band_metadata)
+                json_file.write(json.dumps(json_file_content))
+                json_file.close()
 
     return downloaded_files
 
