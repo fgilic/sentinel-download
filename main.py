@@ -3,7 +3,7 @@ import csv
 import sys
 
 from mosaicking import create_rgb_composite, merge_rgb
-from utils import build_search_params, get_response, get_xml_root, parse_search_results, get_bands, get_intersecting_mgrs_tiles
+from utils import build_search_params, get_response, get_xml_root, parse_search_results, get_bands, get_intersecting_mgrs_tiles, check_for_no_data_pixels
 
 
 if __name__ == '__main__':
@@ -68,6 +68,8 @@ if __name__ == '__main__':
                 entry_for_download = entry
                 break
         downloaded_files = get_bands(entry_for_download, bands_no, root_download_folder)
+
+        check_for_no_data_pixels(root_download_folder, downloaded_files, intersecting_tile)
 
         create_rgb_composite(downloaded_files, root_download_folder)
 

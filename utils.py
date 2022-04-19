@@ -4,6 +4,8 @@ import sys
 import time
 
 import xml.etree.ElementTree as ET
+import rasterio
+from rasterio import features
 from shapely.geometry import shape
 from shapely import wkt
 import requests
@@ -293,6 +295,17 @@ def get_bands(safe_file_data, bands_no, root_dowload_folder):
 
     downloaded_files = download_bands(safe_file_download_uri, safe_file_name, bands_metadata, root_dowload_folder)
     return downloaded_files
+
+
+def check_for_no_data_pixels(root_download_folder, downloaded_file_names, mgrs_tile):
+    for band_file_name in downloaded_file_names:
+        with rasterio.open(root_download_folder + "\\" + band_file_name) as band_file:
+            band = band_file.read(1)
+            nodata_mask = band == 0
+            shape = features.shapes(band, mask=nodata_mask, transform=band_file.transform)
+            geometry = next(shape)[0]
+            a = 3
+
 
 if __name__ == '__main__':
     pass
