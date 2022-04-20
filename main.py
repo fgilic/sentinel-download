@@ -11,19 +11,19 @@ if __name__ == '__main__':
     start = 0  # 0 is also default if not defined
 
     root_search_uri = "https://scihub.copernicus.eu/dhus/search"
-    producttype = "S2MSI2A"
+    producttype = "S2MSI1C"
     # beginposition = "[NOW-9MONTHS TO NOW]"
     beginposition = "[2021-08-01T00:00:00.000Z TO 2021-08-31T00:00:00.000Z]"
     # point: '(Lat, Long)'; polygon: 'POLYGON((Long1 Lat1, Long2 Lat2, ..., Long1 Lat1))'
     # Lat and Long in decimal degrees
     # http://arthur-e.github.io/Wicket/sandbox-gmaps3.html
     # footprint = "POLYGON((16.1430 43.3531, 16.7802 43.3531, 16.7802 43.6489, 16.1430 43.6489, 16.1430 43.3531))"
-    footprint_points = ["44.65, 15.60", "44.65, 16.93", "43.74, 15.60", "43.74, 16.93"]
+    # footprint_points = ["44.65, 15.60", "44.65, 16.93", "43.74, 15.60", "43.74, 16.93"]
     cloudcoverpercentage = "[0 TO 35]"
-    bands_no = ["B02_10m", "B03_10m", "B04_10m"]
-    root_download_folder = "D:\\2-S2-mosaick\\bands"
+    bands_no = ["B02", "B03", "B04"]
+    root_download_folder = "D:\\2-S2-mosaick\\bands\\l1c_split"
 
-    footprint_polygon_file_path = "D:\\2-S2-mosaick\\bands\\footprint.geojson"
+    footprint_polygon_file_path = "D:\\2-S2-mosaick\\bands\\footprint_split.geojson"
     intersecting_tiles = get_intersecting_mgrs_tiles(footprint_polygon_file_path)
 
     for n, intersecting_tile in enumerate(intersecting_tiles, start=1):
@@ -69,8 +69,8 @@ if __name__ == '__main__':
                 break
         downloaded_files = get_bands(entry_for_download, bands_no, root_download_folder)
 
-        check_for_no_data_pixels(root_download_folder, downloaded_files, intersecting_tile)
+        # check_for_no_data_pixels(root_download_folder, downloaded_files, intersecting_tile)
 
-        create_rgb_composite(downloaded_files, root_download_folder)
+        # create_rgb_composite(downloaded_files, root_download_folder)
 
     # merge_rgb()

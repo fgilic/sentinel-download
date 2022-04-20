@@ -154,6 +154,10 @@ def get_checksum(file_name, checksum_name):
 
 
 def get_bands_metadata(safe_file_data, bands_no):
+    resolutions = {
+        "B01": 60, "B02": 10, "B03": 10, "B04": 10, "B05": 20, "B06": 20, "B07": 20, "B08": 10,
+        "B8A": 20, "B09": 60, "B10": 60, "B11": 20, "B12": 20
+    }
     safe_file_name = safe_file_data["safe_file_name"]
     safe_file_download_uri = safe_file_data["download_uri"]
     manifest_download_uri = safe_file_download_uri.replace("$value",f"Nodes('{safe_file_name}')/Nodes('manifest.safe')/$value")
@@ -163,7 +167,7 @@ def get_bands_metadata(safe_file_data, bands_no):
     bands_metadata = []
     for data_object in root.iter('dataObject'):
         for band_no in bands_no:
-            if f"Band_{band_no}" in data_object.attrib["ID"]:
+            if (band_no + ".jp2") in data_object.find("byteStream").find("fileLocation").get("href"):
                 band_metadata = safe_file_data
                 band_metadata["band_no"] = band_no
                 band_metadata["id"] = data_object.attrib["ID"]
@@ -180,16 +184,11 @@ def get_bands_metadata(safe_file_data, bands_no):
 
     response = get_response(bands_metadata_download_uri)
     root = get_xml_root(response)
-    geometric_info = root.find("{https://psd-14.sentinel2.eo.esa.int/PSD/S2_PDI_Level-2A_Tile_Metadata.xsd}Geometric_Info")
+    geometric_info = root.find("{https://psd-14.sentinel2.eo.esa.int/PSD/S2_PDI_Level-1C_Tile_Metadata.xsd}Geometric_Info")
     for band_metadata in bands_metadata:
         band_metadata["horiz_crs_name"] = geometric_info.find("./Tile_Geocoding/HORIZONTAL_CS_NAME").text
         band_metadata["horiz_crs_code"] = geometric_info.find("./Tile_Geocoding/HORIZONTAL_CS_CODE").text
-        if "10m" in band_metadata["band_no"]:
-            resolution = 10
-        elif "20m" in band_metadata["band_no"]:
-            resolution = 20
-        elif "60m" in band_metadata["band_no"]:
-            resolution = 60
+        resolution = resolutions[band_no]
         rows = geometric_info.find(f"./Tile_Geocoding/Size[@resolution='{resolution}']/NROWS").text
         columns = geometric_info.find(f"./Tile_Geocoding/Size[@resolution='{resolution}']/NCOLS").text
         ulx = geometric_info.find(f"./Tile_Geocoding/Geoposition[@resolution='{resolution}']/ULX").text
@@ -242,9 +241,9 @@ def download_bands(safe_file_download_uri, safe_file_name, bands_metadata, root_
     for band_metadata in bands_metadata:
         tile_folder_name = band_metadata["file_location"].split("/")[2]
         band_file_name = band_metadata["file_location"].split("/")[-1]
-        resolution_folder = "R" + band_metadata["band_no"].split("_")[1]
         # https://scihub.copernicus.eu/dhus/odata/v1/Products('aeff9a9c-5bf1-425c-8256-d26391156116')/Nodes('S2B_MSIL2A_20200822T094039_N0214_R036_T33TYH_20200822T115325.SAFE')/Nodes('GRANULE')/Nodes('L2A_T33TYH_A018080_20200822T094034')/Nodes('IMG_DATA')/Nodes('R10m')/Nodes('T33TYH_20200822T094039_B02_10m.jp2')/
-        band_download_uri = safe_file_download_uri.replace("$value", f"Nodes('{safe_file_name}')/Nodes('GRANULE')/Nodes('{tile_folder_name}')/Nodes('IMG_DATA')/Nodes('{resolution_folder}')/Nodes('{band_file_name}')/$value")
+        # https://scihub.copernicus.eu/dhus/odata/v1/Products('45148750-a0d6-4d41-866a-4b9e9186114b')/Nodes('S2B_MSIL1C_20210830T095029_N0301_R079_T33TWH_20210830T104000.SAFE')/Nodes('GRANULE')/Nodes('L1C_T33TWH_A023414_20210830T095026')/Nodes('IMG_DATA')/Nodes('T33TWH_20210830T095029_B01.jp2')/
+        band_download_uri = safe_file_download_uri.replace("$value", f"Nodes('{safe_file_name}')/Nodes('GRANULE')/Nodes('{tile_folder_name}')/Nodes('IMG_DATA')/Nodes('{band_file_name}')/$value")
         download_band(band_download_uri, root_download_folder, band_file_name, band_metadata["band_file_size"], band_metadata["checksum"], band_metadata["checksum_name"])
 
         downloaded_files.append(band_file_name)
